@@ -9,6 +9,10 @@ cdef extern from "Python.h":
     int PySequence_Check(object)
     object PyNumber_Index(object)
     Py_ssize_t PySequence_Size(object) except -1
+    object PyMemoryView_FromMemory(char *mem, Py_ssize_t size, int flags)
+    int PyBUF_WRITE # = 0x200
+
+from libc.stdint cimport uintptr_t
 
 cdef inline int is_integral(object ob):
     if not PyIndex_Check(ob): return 0
@@ -134,6 +138,9 @@ cdef _p_message message_simple(object msg,
     cdef object o_count = None
     cdef object o_displ = None
     cdef object o_type  = None
+    cdef uintptr_t dev_ptr = 0
+    cdef dict cuda_array_interface = None
+    cdef int size = 1
     if is_buffer(msg):
         o_buf = msg
     elif is_list(msg) or is_tuple(msg):
@@ -154,6 +161,22 @@ cdef _p_message message_simple(object msg,
             raise ValueError("message: expecting 2 to 4 items")
     elif PYPY:
         o_buf = msg
+    elif hasattr(msg, '__cuda_array_interface__'):
+        # CUDA array interface for interoperating Python CUDA GPU libraries
+        # Ref: numba.pydata.org/numba-doc/latest/cuda/cuda_array_interface.html
+        cuda_array_interface = msg.__cuda_array_interface__
+        if 'strides' in cuda_array_interface.keys():
+            raise RuntimeError("message: CUDA array should be C-contiguous")
+        dev_ptr = <long>(cuda_array_interface['data'][0])
+        shape = cuda_array_interface['shape']
+        for s in shape:
+            size *= s
+        # typestr follows Numpy convention, e.g. '<f8'
+        # see https://docs.scipy.org/doc/numpy/reference/arrays.dtypes.html
+        o_type = cuda_array_interface['typestr'][1:]
+        total_bytes = int(o_type[1:]) * size
+        o_buf = PyMemoryView_FromMemory(<char*>dev_ptr,
+                                        total_bytes, PyBUF_WRITE)
     else:
         raise TypeError("message: expecting buffer or list/tuple")
     # buffer: address, length, and datatype
