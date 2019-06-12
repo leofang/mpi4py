@@ -22,9 +22,11 @@ cdef inline int is_integral(object ob):
 
 cdef inline int is_buffer(object ob):
     if PY3:
-        return PyObject_CheckBuffer(ob)
+        return PyObject_CheckBuffer(ob) or \
+               hasattr(ob, '__cuda_array_interface__')
     else:
-        return PyObject_CheckBuffer(ob) or _Py2_IsBuffer(ob)
+        return PyObject_CheckBuffer(ob) or _Py2_IsBuffer(ob) or \
+               hasattr(ob, '__cuda_array_interface__')
 
 cdef inline int is_datatype(object ob):
     if isinstance(ob, Datatype): return 1

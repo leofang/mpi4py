@@ -132,10 +132,53 @@ cdef int Py27_GetBuffer(object obj, Py_buffer *view, int flags) except -1:
 
 #------------------------------------------------------------------------------
 
+# CUDA array interface for interoperating Python CUDA GPU libraries
+# See http://numba.pydata.org/numba-doc/latest/cuda/cuda_array_interface.html
+cdef int Py_GetCUDABuffer(object obj, Py_buffer *view, int flags) except -1:
+    cdef dict cuda_array_interface
+    cdef object addr
+    cdef void *buf = NULL
+    cdef Py_ssize_t size = 1
+    cdef bint readonly = 0
+    cdef Py_ssize_t type_size = 0
+    cdef tuple shape
+    cdef str type_str
+
+    cuda_array_interface = obj.__cuda_array_interface__
+    # Let us respect the readonly flag, and throw any potential problem to
+    # upstream library maintainers
+    addr, readonly = cuda_array_interface['data']
+    buf = PyLong_AsVoidPtr(addr)
+    shape = cuda_array_interface['shape']
+    for s in shape:
+        size *= s
+    # typestr follows Numpy convention, e.g. '<f8'
+    # See https://docs.scipy.org/doc/numpy/reference/arrays.dtypes.html
+    type_str = cuda_array_interface['typestr'][1:]
+    type_size = int(type_str[1:])
+    size *= type_size
+    #if 'strides' in cuda_array_interface.keys():
+    #    strides = cuda_array_interface['strides']
+    #    if len(strides) != len(shape):
+    #        raise RuntimeError("message: CUDA array shape and strides unequal")
+    #    if 
+    #        raise RuntimeError("message: CUDA array should be C-contiguous")
+
+    #if buf == NULL and size == 0: buf = emptybuffer
+    PyBuffer_FillInfo(view, obj, buf, size, readonly, flags)
+    if (flags & PyBUF_FORMAT) == PyBUF_FORMAT: view.format = BYTE_FMT
+    return 0
+
+#------------------------------------------------------------------------------
+
 cdef int PyMPI_GetBuffer(object obj, Py_buffer *view, int flags) except -1:
     if PYPY: return PyPy_GetBuffer(obj, view, flags)
     if PY2:  return Py27_GetBuffer(obj, view, flags)
-    return PyObject_GetBuffer(obj, view, flags)
+    try:
+        return PyObject_GetBuffer(obj, view, flags)
+    except TypeError:
+        # see if it's a CUDA array
+        return Py_GetCUDABuffer(obj, view, flags)
 
 #------------------------------------------------------------------------------
 
