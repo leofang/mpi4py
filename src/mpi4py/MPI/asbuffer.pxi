@@ -148,6 +148,9 @@ cdef int Py_GetCUDABuffer(object obj, Py_buffer *view, int flags) except -1:
     # Let us respect the readonly flag, and throw any potential problem to
     # upstream library maintainers
     addr, readonly = cuda_array_interface['data']
+    # check 0-size array
+    if addr == 0 or addr is None: # CuPy uses 0, Numba uses None...
+        raise RuntimeError("CUDA array has 0 element")
     buf = PyLong_AsVoidPtr(addr)
     shape = cuda_array_interface['shape']
     for s in shape:
