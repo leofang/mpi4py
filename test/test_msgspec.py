@@ -1,6 +1,7 @@
 from mpi4py import MPI
 import mpiunittest as unittest
 from arrayimpl import allclose
+from arrayimpl import typestr
 import sys
 
 typemap = MPI._typedict
@@ -17,6 +18,38 @@ except ImportError:
 pypy = hasattr(sys, 'pypy_version_info')
 pypy2 = pypy and sys.version_info[0] == 2
 pypy_lt_53 = pypy and sys.pypy_version_info < (5, 3)
+
+
+class GPUArray(object):
+
+    def __init__(self, typecode, initializer, readonly=False):
+        self._buf = array.array(typecode, initializer)
+        address = self._buf.buffer_info()[0]
+        typecode = self._buf.typecode
+        itemsize = self._buf.itemsize
+        self.__cuda_array_interface__ = dict(
+            version = 0,
+            data    = (address, readonly),
+            typestr = typestr(typecode, itemsize),
+            shape   = (len(self._buf), 1, 1),
+            strides = (itemsize,) * 3
+        )
+
+    def __eq__(self, other):
+        return self._buf == other._buf
+
+    def __ne__(self, other):
+        return self._buf != other._buf
+
+    def __len__(self):
+        return len(self._buf)
+
+    def __getitem__(self, item):
+        return self._buf[item]
+
+    def __setitem__(self, item, value):
+        self._buf[item] = value._buf
+
 
 def Sendrecv(smsg, rmsg):
     MPI.COMM_SELF.Sendrecv(sendbuf=smsg, dest=0,   sendtag=0,
@@ -274,6 +307,53 @@ class TestMessageSimple(unittest.TestCase):
         self.assertRaises((BufferError, ValueError),
                           Sendrecv, rbuf, wbuf)
 
+    @unittest.skipIf(array is None, 'array')
+    def checkGPUArray(self, test):
+        from operator import eq as equal
+        for t in tuple(self.TYPECODES):
+            for n in range(1, 10):
+                z = GPUArray(t, [0]*n, readonly=True)
+                s = GPUArray(t, list(range(n)), readonly=True)
+                r = GPUArray(t, [0]*n)
+                test(equal, z, s, r, t)
+    def testGPUArray1(self):
+        self.checkGPUArray(self.check1)
+    def testGPUArray21(self):
+        self.checkGPUArray(self.check21)
+    def testGPUArray22(self):
+        self.checkGPUArray(self.check22)
+    def testGPUArray31(self):
+        self.checkGPUArray(self.check31)
+    def testGPUArray32(self):
+        self.checkGPUArray(self.check32)
+    def testGPUArray4(self):
+        self.checkGPUArray(self.check4)
+
+    @unittest.skipIf(array is None, 'array')
+    def testGPUArrayBadReadonly(self):
+        smsg = GPUArray('B', [1,2,3], readonly=True)
+        rmsg = GPUArray('B', [0,0,0], readonly=True)
+        def f(): Sendrecv(smsg, rmsg)
+        if pypy: self.assertRaises(ValueError,  f)
+        else:    self.assertRaises(BufferError, f)
+
+    @unittest.skipIf(array is None, 'array')
+    def testGPUArrayBadInterfaceNone(self):
+        smsg = GPUArray('B', [1,2,3])
+        rmsg = GPUArray('B', [0,0,0])
+        rmsg.__cuda_array_interface__ = None
+        def f(): Sendrecv(smsg, rmsg)
+        self.assertRaises(TypeError, f)
+
+    @unittest.skipIf(array is None, 'array')
+    def testGPUArrayBadInterfaceEmpty(self):
+        smsg = GPUArray('B', [1,2,3])
+        rmsg = GPUArray('B', [0,0,0])
+        rmsg.__cuda_array_interface__ = {}
+        def f(): Sendrecv(smsg, rmsg)
+        self.assertRaises(KeyError, f)
+
+
 @unittest.skipMPI('msmpi(<8.0.0)')
 class TestMessageBlock(unittest.TestCase):
 
@@ -479,6 +559,28 @@ class TestMessageVector(unittest.TestCase):
     def testNumPy4(self):
         self.checkNumPy(self.check4)
 
+    @unittest.skipIf(array is None, 'array')
+    def checkGPUArray(self, test):
+        from operator import eq as equal
+        for t in tuple(self.TYPECODES):
+            for n in range(1, 10):
+                z = GPUArray(t, [0]*n, readonly=True)
+                s = GPUArray(t, list(range(n)), readonly=True)
+                r = GPUArray(t, [0]*n)
+                test(equal, z, s, r, t)
+    def testGPUArray1(self):
+        self.checkGPUArray(self.check1)
+    def testGPUArray21(self):
+        self.checkGPUArray(self.check21)
+    def testGPUArray22(self):
+        self.checkGPUArray(self.check22)
+    def testGPUArray31(self):
+        self.checkGPUArray(self.check31)
+    def testGPUArray32(self):
+        self.checkGPUArray(self.check32)
+    def testGPUArray4(self):
+        self.checkGPUArray(self.check4)
+
 def Alltoallw(smsg, rmsg):
     try:
         MPI.COMM_SELF.Alltoallw(smsg, rmsg)
@@ -529,6 +631,15 @@ class TestMessageVectorW(unittest.TestCase):
         Alltoallw(smsg, rmsg)
         self.assertEqual(sbuf[0], rbuf[0])
         self.assertEqual(bytearray(2), rbuf[1:])
+
+    @unittest.skipIf(array is None, 'array')
+    def testMessageGPUArray(self):
+        sbuf = GPUArray('i', [1,2,3], readonly=True)
+        rbuf = GPUArray('i', [0,0,0], readonly=False)
+        smsg = [sbuf, [3], [0], [MPI.INT]]
+        rmsg = [rbuf, ([3], [0]), [MPI.INT]]
+        Alltoallw(smsg, rmsg)
+        self.assertEqual(sbuf, rbuf)
 
 def PutGet(smsg, rmsg, target):
     try: win =  MPI.Win.Allocate(8, 1, MPI.INFO_NULL, MPI.COMM_SELF)

@@ -218,8 +218,55 @@ if numpy is not None:
                 self.array[:] = arg
 
 
+def typestr(typecode, itemsize):
+    typestr = ''
+    if sys.byteorder == 'little':
+        typestr += '<'
+    if sys.byteorder == 'big':
+        typestr += '>'
+    if typecode in '?':
+        typestr += 'b'
+    if typecode in 'bhilq':
+        typestr += 'i'
+    if typecode in 'BHILQ':
+        typestr += 'u'
+    if typecode in 'fdg':
+        typestr += 'f'
+    if typecode in 'FDG':
+        typestr += 'c'
+    typestr += str(itemsize)
+    return typestr
 
 
+class BaseGPUArray(object):
+
+    def set_interface(self, shape, readonly=False):
+        self.__cuda_array_interface__ = dict(
+            version = 0,
+            data    = (self.address, readonly),
+            typestr = typestr(self.typecode, self.itemsize),
+            shape   = shape,
+        )
+
+    def as_raw(self):
+        return self
 
 
+if array is not None:
 
+    @export
+    class FakeGPUArrayBasic(BaseGPUArray, ArrayBasic):
+
+        def __init__(self, arg, typecode, shape=None, readonly=False):
+            super(FakeGPUArrayBasic, self).__init__(arg, typecode, shape)
+            self.set_interface((len(self),), readonly)
+
+
+if numpy is not None:
+
+    @export
+    class FakeGPUArrayNumPy(BaseGPUArray, ArrayNumPy):
+
+        def __init__(self, arg, typecode, shape=None, readonly=False):
+            super(FakeGPUArrayNumPy, self).__init__(arg, typecode, shape)
+            self.set_interface(self.array.shape, readonly)
