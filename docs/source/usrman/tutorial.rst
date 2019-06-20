@@ -52,13 +52,17 @@ communication of buffer-provider objects (e.g., NumPy arrays).
   specified as ``[data, count, displ, datatype]``, where ``count`` and
   ``displ`` are sequences of integral values.
 
-  Automatic MPI datatype discovery for NumPy arrays and PEP-3118
+  Automatic MPI datatype discovery for NumPy/CUDA arrays and PEP-3118
   buffers is supported, but limited to basic C types (all C/C99-native
   signed/unsigned integral types and single/double precision
   real/complex floating types) and availability of matching datatypes
   in the underlying MPI implementation. In this case, the
   buffer-provider object can be passed directly as a buffer argument,
   the count and MPI datatype will be inferred.
+
+  If mpi4py is built against a CUDA-aware MPI, CUDA GPU arrays can be
+  passed to the upper-case methods as long as they have a ``__cuda_array_interface__``
+  attribute.
 
 
 Running Python scripts with MPI
@@ -337,7 +341,7 @@ Dynamic Process Management
 
 
 CUDA-aware MPI + Python GPU arrays with ``__cuda_array_interface__``
-----------------------------------------------------------------
+--------------------------------------------------------------------
 
 * Allreducing CuPy arrays::
 
