@@ -57,13 +57,14 @@ cdef int Py_CheckCUDABuffer(object obj):
     except: return 0
 
 cdef int Py_GetCUDABuffer(object obj, Py_buffer *view, int flags) except -1:
-    cdef object cuda_array_interface
+    cdef dict cuda_array_interface
     cdef tuple data
     cdef str   typestr
     cdef tuple shape
     cdef tuple strides
     cdef list descr
-    cdef object dev_ptr
+    cdef object dev_ptr, mask
+    cdef int version
     cdef void *buf = NULL
     cdef bint readonly = 0
     cdef Py_ssize_t s, size = 1
@@ -76,30 +77,44 @@ cdef int Py_GetCUDABuffer(object obj, Py_buffer *view, int flags) except -1:
     except AttributeError:
         raise NotImplementedError("missing CUDA array interface")
 
+    # mandatory
     data = cuda_array_interface['data']
     typestr = cuda_array_interface['typestr']
     shape = cuda_array_interface['shape']
-    try: strides = cuda_array_interface['strides']
-    except KeyError: strides = None
-    try: descr = cuda_array_interface['descr']
-    except KeyError: descr = None
+    version = cuda_array_interface['version']
+
+    # optional
+    strides = cuda_array_interface.get('strides')
+    descr = cuda_array_interface.get('descr')
+    mask = cuda_array_interface.get('mask')
 
     dev_ptr, readonly = data
     for s in shape: size *= s
-    if dev_ptr is None and size == 0: dev_ptr = 0 # XXX
+    if size == 0:
+        if dev_ptr is None:
+            # fix for Numba < 0.46
+            dev_ptr = 0
+        elif version >= 2:
+            assert dev_ptr == 0
     buf = PyLong_AsVoidPtr(dev_ptr)
     typekind = <char>ord(typestr[1])
     itemsize = <Py_ssize_t>int(typestr[2:])
 
+    if mask is not None:
+        raise NotImplementedError(
+            "MPI does not support masked arrays"
+        )
     if size < 0:
         raise BufferError(
             "__cuda_array_interface__: "
             "buffer with negative size (shape:%s, size:%d)"
             % (shape, size)
         )
-    if (strides is not None and
-        not cuda_is_contig(shape, strides, itemsize, c'C') and
-        not cuda_is_contig(shape, strides, itemsize, c'F')):
+    if strides is not None:
+        if (version >= 2 and
+            not cuda_is_contig(shape, strides, itemsize, c'F')) or
+           (not cuda_is_contig(shape, strides, itemsize, c'C') and
+            not cuda_is_contig(shape, strides, itemsize, c'F')):
         raise BufferError(
             "__cuda_array_interface__: "
             "buffer is not contiguous (shape:%s, strides:%s, itemsize:%d)"
