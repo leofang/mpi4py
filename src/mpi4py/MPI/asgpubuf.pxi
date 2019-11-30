@@ -112,14 +112,14 @@ cdef int Py_GetCUDABuffer(object obj, Py_buffer *view, int flags) except -1:
         )
     if strides is not None:
         if (version >= 2 and
-            not cuda_is_contig(shape, strides, itemsize, c'F')) or
+            not cuda_is_contig(shape, strides, itemsize, c'F')) or \
            (not cuda_is_contig(shape, strides, itemsize, c'C') and
             not cuda_is_contig(shape, strides, itemsize, c'F')):
-        raise BufferError(
-            "__cuda_array_interface__: "
-            "buffer is not contiguous (shape:%s, strides:%s, itemsize:%d)"
-            % (shape, strides, itemsize)
-        )
+            raise BufferError(
+                "__cuda_array_interface__: "
+                "buffer is not contiguous (shape:%s, strides:%s, itemsize:%d)"
+                % (shape, strides, itemsize)
+            )
     if descr is not None and (len(descr) != 1 or descr[0] != ('', typestr)):
         PyErr_WarnEx(RuntimeWarning,
                      b"__cuda_array_interface__: "
