@@ -438,14 +438,12 @@ class TestMessageGPUBufInterface(unittest.TestCase):
     def testAttrEmpty(self):
         smsg = GPUBuf('B', [1,2,3])
         rmsg = GPUBuf('B', [0,0,0])
-        class MyDict(dict): pass
-        rmsg.__cuda_array_interface__ = MyDict()
+        rmsg.__cuda_array_interface__ = dict()
         self.assertRaises(KeyError, Sendrecv, smsg, rmsg)
 
     def testAttrType(self):
         smsg = GPUBuf('B', [1,2,3])
         rmsg = GPUBuf('B', [0,0,0])
-        class MyDict(dict): pass
         items = list(rmsg.__cuda_array_interface__.items())
         rmsg.__cuda_array_interface__ = items
         self.assertRaises(TypeError, Sendrecv, smsg, rmsg)
