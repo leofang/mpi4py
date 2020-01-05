@@ -64,7 +64,7 @@ cdef int Py_GetCUDABuffer(object obj, Py_buffer *view, int flags) except -1:
     cdef tuple strides
     cdef list descr
     cdef object dev_ptr, mask
-    cdef int version
+    cdef int version, F_flag
     cdef void *buf = NULL
     cdef bint readonly = 0
     cdef Py_ssize_t s, size = 1
@@ -102,7 +102,8 @@ cdef int Py_GetCUDABuffer(object obj, Py_buffer *view, int flags) except -1:
 
     if mask is not None:
         raise NotImplementedError(
-            "MPI does not support masked arrays"
+            "__cuda_array_interface__: "
+            "cannot handle masked arrays"
         )
     if size < 0:
         raise BufferError(
@@ -111,10 +112,9 @@ cdef int Py_GetCUDABuffer(object obj, Py_buffer *view, int flags) except -1:
             % (shape, size)
         )
     if strides is not None:
-        if (version >= 2 and
-            not cuda_is_contig(shape, strides, itemsize, c'F')) or \
-           (not cuda_is_contig(shape, strides, itemsize, c'C') and
-            not cuda_is_contig(shape, strides, itemsize, c'F')):
+        F_flag = cuda_is_contig(shape, strides, itemsize, c'F')
+        if (version >= 2 and not F_flag) or \
+           (not cuda_is_contig(shape, strides, itemsize, c'C') and not F_flag):
             raise BufferError(
                 "__cuda_array_interface__: "
                 "buffer is not contiguous (shape:%s, strides:%s, itemsize:%d)"
