@@ -17,15 +17,13 @@ try:
 except ImportError:
     cupy = None
 try:
-    from numba import __version__ as numba_ver
-    ver = numba_ver.split('.')
-    ver = 1000 * int(ver[0]) + 10 * int(ver[1]) + int(ver[2])
-    if ver < 490:
-        raise RuntimeError('Need to use Numba >= 0.49.0 for '
-                           'testing with its GPU array.')
+    import numba
+    from distutils.version import StrictVersion
+    numba_version = StrictVersion(numba.__version__).version
+    if numba_version < (0, 49):
+        numba = None
     else:
-        del ver, numba_ver, numba
-    from numba import cuda as numba
+        from numba import cuda as numba
 except ImportError:
     numba = None
 
