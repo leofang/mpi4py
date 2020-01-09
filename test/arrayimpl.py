@@ -20,7 +20,7 @@ try:
     import numba
     from distutils.version import StrictVersion
     numba_version = StrictVersion(numba.__version__).version
-    if numba_version < (0, 49):
+    if numba_version < (0, 48):
         numba = None
     else:
         from numba import cuda as numba
