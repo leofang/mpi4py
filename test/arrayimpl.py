@@ -18,12 +18,14 @@ except ImportError:
     cupy = None
 try:
     import numba
+    import numba.cuda
     from distutils.version import StrictVersion
     numba_version = StrictVersion(numba.__version__).version
     if numba_version < (0, 48):
+        import warnings
+        warnings.warn('To test Numba GPU arrays, use Numba v0.48.0+.',
+                      RuntimeWarning)
         numba = None
-    else:
-        from numba import cuda as numba
 except ImportError:
     numba = None
 
@@ -370,15 +372,15 @@ if numba is not None:
                 if shape is None: shape = ()
             else:
                 if shape is None: shape = len(arg)
-            self.array = numba.device_array(shape, typecode)
+            self.array = numba.cuda.device_array(shape, typecode)
             if isinstance(arg, (int, float, complex)):
                 if self.array.size > 0:
                     self.array[:] = arg
             elif arg == [] or arg == ():
-                self.array = numba.device_array(0, typecode)
+                self.array = numba.cuda.device_array(0, typecode)
             else:
                 if self.array.size > 0:
-                    self.array[:] = numba.to_device(arg)
+                    self.array[:] = numba.cuda.to_device(arg)
 
 #        def __getitem__(self, i):
 #            if isinstance(i, slice):
