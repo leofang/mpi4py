@@ -64,7 +64,6 @@ cdef int Py_GetCUDABuffer(object obj, Py_buffer *view, int flags) except -1:
     cdef tuple strides
     cdef list descr
     cdef object dev_ptr, mask
-    cdef int version, F_flag
     cdef void *buf = NULL
     cdef bint readonly = 0
     cdef Py_ssize_t s, size = 1
@@ -81,7 +80,6 @@ cdef int Py_GetCUDABuffer(object obj, Py_buffer *view, int flags) except -1:
     data = cuda_array_interface['data']
     typestr = cuda_array_interface['typestr']
     shape = cuda_array_interface['shape']
-    version = cuda_array_interface['version']
 
     # optional
     strides = cuda_array_interface.get('strides')
@@ -90,12 +88,7 @@ cdef int Py_GetCUDABuffer(object obj, Py_buffer *view, int flags) except -1:
 
     dev_ptr, readonly = data
     for s in shape: size *= s
-    if size == 0:
-        if dev_ptr is None:
-            # fix for Numba < 0.46
-            dev_ptr = 0
-        elif version >= 2:
-            assert dev_ptr == 0
+    if dev_ptr is None and size == 0: dev_ptr = 0 # XXX
     buf = PyLong_AsVoidPtr(dev_ptr)
     typekind = <char>ord(typestr[1])
     itemsize = <Py_ssize_t>int(typestr[2:])
@@ -111,15 +104,14 @@ cdef int Py_GetCUDABuffer(object obj, Py_buffer *view, int flags) except -1:
             "buffer with negative size (shape:%s, size:%d)"
             % (shape, size)
         )
-    if strides is not None:
-        F_flag = cuda_is_contig(shape, strides, itemsize, c'F')
-        if (version >= 2 and not F_flag) or \
-           (not cuda_is_contig(shape, strides, itemsize, c'C') and not F_flag):
-            raise BufferError(
-                "__cuda_array_interface__: "
-                "buffer is not contiguous (shape:%s, strides:%s, itemsize:%d)"
-                % (shape, strides, itemsize)
-            )
+    if (strides is not None and
+        not cuda_is_contig(shape, strides, itemsize, c'C') and
+        not cuda_is_contig(shape, strides, itemsize, c'F')):
+        raise BufferError(
+            "__cuda_array_interface__: "
+            "buffer is not contiguous (shape:%s, strides:%s, itemsize:%d)"
+            % (shape, strides, itemsize)
+        )
     if descr is not None and (len(descr) != 1 or descr[0] != ('', typestr)):
         PyErr_WarnEx(RuntimeWarning,
                      b"__cuda_array_interface__: "
