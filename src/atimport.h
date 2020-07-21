@@ -15,6 +15,7 @@
 
 #include "pympivendor.h"
 #include "pympicommctx.h"
+#include "pympicuda.h"
 
 /* ------------------------------------------------------------------------- */
 

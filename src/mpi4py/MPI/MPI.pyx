@@ -369,3 +369,25 @@ def _handleof(arg):
         raise TypeError("expecting an MPI instance")
 
 # --------------------------------------------------------------------
+
+cdef extern from *:
+    int MPIX_Query_cuda_support()
+
+def Query_cuda_support():
+    """
+    Query whether the MPI implementation is CUDA-aware or not.
+
+    Returns a bool (``True`` for CUDA-aware, ``False`` for CUDA-
+    unaware) or ``None`` (cannot be determined: either the MPI
+    implementation does not provide a compile-time/runtime query,
+    or CUDA is not supported, or mpi4py does not know how to query
+    it).
+
+    Note that this function could return ``True`` (CUDA-aware) but
+    the support is still disabled at runtime. In this case, please
+    consult the MPI implementation's user manual for how to enable
+    it.
+    """
+    cdef int flag = MPIX_Query_cuda_support()
+    if flag == -1: return None
+    return <bint>flag
